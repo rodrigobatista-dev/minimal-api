@@ -1,7 +1,9 @@
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using minimal_api.Dominio.ModelViews;
 using MinimalApi.Dominio.Entity;
+using MinimalApi.Dominio.Enuns;
 using MinimalApi.Dominio.Interfaces;
 using MinimalApi.Dominio.ModelViews;
 using MinimalApi.Dominio.Service;
@@ -10,6 +12,11 @@ using MinimalApi.Infrastructure.Db;
 
 #region Builder
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 builder.Services.AddScoped<IAdministradorServico, AdministradorServico>();
 builder.Services.AddScoped<IVeiculoServico, VeiculoServico>();
@@ -30,6 +37,26 @@ app.MapGet("/", () => Results.Json(new Home())).WithTags("Home");
 #endregion
 
 #region Administradores
+ErrosDeValidacao validaADMDTO(AdministradoresDTO administradoresDTO)
+{
+    var validacao = new ErrosDeValidacao();
+
+    if (string.IsNullOrEmpty(administradoresDTO.Email))
+    {
+        validacao.Mensagens.Add("O email é obrigatória.");
+    }
+    if (administradoresDTO.Senha == null || administradoresDTO.Senha.Length < 6)
+    {
+        validacao.Mensagens.Add("A senha  é inválida. Deve conter ao menos 6 caracteres.");
+    }
+    if (!Enum.TryParse<Perfil>(administradoresDTO.Perfil, true, out var perfilValido))
+    {
+        validacao.Mensagens.Add("O perfil do administrador é inválido. Deve ser 'Comum' ou 'Admin'.");
+
+    }
+    return validacao;
+}
+
 app.MapPost("/administradores/login", static ([FromBody] LoginDTO loginDTO, IAdministradorServico administradorServico) =>
 {
     if (administradorServico.Login(loginDTO) != null)
@@ -38,6 +65,96 @@ app.MapPost("/administradores/login", static ([FromBody] LoginDTO loginDTO, IAdm
     }
     return Results.Unauthorized();
 }).WithTags("Administradores");
+
+app.MapPost("/administradores", ([FromBody] AdministradoresDTO administradoresDTO, IAdministradorServico administradorServico) =>
+{
+    var validacao = validaADMDTO(administradoresDTO);
+    if (validacao.Mensagens.Count > 0)
+    {
+        return Results.BadRequest(validacao);
+    }
+
+    var administrador = new Administrador
+    {
+        Email = administradoresDTO.Email ?? string.Empty,
+        Senha = administradoresDTO.Senha ?? string.Empty,
+        Perfil = administradoresDTO.Perfil != null ? administradoresDTO.Perfil.ToString() : Perfil.Comum.ToString()
+    };
+    administradorServico.Incluir(administrador);
+
+    return Results.Created($"/administradores/{administrador.Id}", new AdministradorModeViews
+    {
+        Id = administrador.Id,
+        Email = administrador.Email,
+        Perfil = administrador.Perfil
+    });
+}).WithTags("Administradores");
+app.MapGet("/administradores", ([FromQuery] int? pagina, IAdministradorServico administradorServico) =>
+{
+
+    var adms = new List<AdministradorModeViews>();
+    var administradores =  administradorServico.Todos(pagina);
+    foreach (var adm in administradores)
+    {
+        adms.Add(new AdministradorModeViews
+        {
+            Id = adm.Id,
+            Email = adm.Email,
+            Perfil = adm.Perfil
+        });
+    }
+    return Results.Ok(adms);
+
+}).WithTags("Administradores");
+
+app.MapGet("administradores/{id}", ([FromRoute] int id, IAdministradorServico administradorServico) =>
+{
+    var administrador = administradorServico.BuscarPorId(id);
+    if (administrador == null)
+    {
+        return Results.NotFound();
+    }
+    return Results.Ok(new AdministradorModeViews
+    {
+        Id = administrador.Id,
+        Email = administrador.Email,
+        Perfil = administrador.Perfil
+    });
+}).WithTags("Administradores");
+
+app.MapPut("/administradores/{id}", ([FromRoute] int id, [FromBody] AdministradoresDTO administradoresDTO, IAdministradorServico administradorServico) =>
+{
+    var administrador = administradorServico.BuscarPorId(id);
+    if (administrador == null)
+    {
+        return Results.NotFound();
+    }
+    var validacao = validaADMDTO(administradoresDTO);
+    if (validacao.Mensagens.Count > 0)
+    {
+        return Results.BadRequest(validacao);
+    }
+    administrador.Email = administradoresDTO.Email ?? administrador.Email;
+    administrador.Senha = administradoresDTO.Senha ?? administrador.Senha;
+    administrador.Perfil = administradoresDTO.Perfil.ToString();
+
+    administradorServico.Atualizar(administrador);
+    return Results.Ok(administrador);
+
+}).WithTags("Administradores");
+
+app.MapDelete("/administradores/{id}", ([FromRoute] int id, IAdministradorServico administradorServico) =>
+{
+    var administrador = administradorServico.BuscarPorId(id);
+    if (administrador == null)
+    {
+        return Results.NotFound();
+    }
+
+    administradorServico.Apagar(administrador);
+    return Results.Ok();
+}).WithTags("Administradores");
+
 #endregion
 
 #region Veiculos
@@ -53,7 +170,7 @@ ErrosDeValidacao validaDTO(VeiculoDTO veiculoDTO)
     {
         validacao.Mensagens.Add("A marca do veículo é obrigatória.");
     }
-    if(veiculoDTO.Ano < 1886 || veiculoDTO.Ano > DateTime.Now.Year + 1)
+    if (veiculoDTO.Ano < 1886 || veiculoDTO.Ano > DateTime.Now.Year + 1)
     {
         validacao.Mensagens.Add("O ano do veículo é inválido.");
     }
@@ -80,9 +197,9 @@ app.MapPost("/veiculos", ([FromBody] VeiculoDTO veiculoDTO, IVeiculoServico veic
     return Results.Created($"/veiculos/{veiculo.Id}", veiculo);
 }).WithTags("Veiculos");
 
-app.MapGet("/veiculos", ([FromQuery] int ? pagina, IVeiculoServico veiculoServico) =>
+app.MapGet("/veiculos", ([FromQuery] int? pagina, IVeiculoServico veiculoServico) =>
 {
-    
+
     var veiculos = veiculoServico.Todos(pagina);
     return Results.Ok(veiculos);
 }).WithTags("Veiculos");
@@ -105,13 +222,13 @@ app.MapPut("/veiculos/{id}", ([FromRoute] int id, [FromBody] VeiculoDTO veiculoD
         return Results.NotFound();
     }
 
-     var validacao = validaDTO(veiculoDTO);
+    var validacao = validaDTO(veiculoDTO);
     if (validacao.Mensagens.Count > 0)
     {
         return Results.BadRequest(validacao);
     }
 
-    
+
 
     veiculo.Nome = veiculoDTO.Nome ?? veiculo.Nome;
     veiculo.Marca = veiculoDTO.Marca ?? veiculo.Marca;
