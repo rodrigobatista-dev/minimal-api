@@ -15,7 +15,7 @@ public class Veiculo
 
     [Required]
     [StringLength(100)]
-    public string Modelo { get; set; } = default!;
+    public string Marca { get; set; } = default!;
 
     [Required]
     public int Ano { get; set; } = default!;

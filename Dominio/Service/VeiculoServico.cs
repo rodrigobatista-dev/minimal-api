@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using MinimalApi.Dominio.Entity;
 using MinimalApi.Dominio.Interfaces;
@@ -38,7 +39,7 @@ public class VeiculoServico : IVeiculoServico
         _contexto.SaveChanges();
     }
 
-    public List<Veiculo> Todos(int? pagina = 1, string? nome = null, string? modelo = null)
+    public List<Veiculo> Todos(int? pagina = 1, string? nome = null, string? marca = null)
     {
         var query = _contexto.Veiculos.AsQueryable();
         if (!string.IsNullOrEmpty(nome))
@@ -48,7 +49,7 @@ public class VeiculoServico : IVeiculoServico
 
         int itensPorPagina = 10;
     if(pagina != null)
-        query = query.Skip(((int)pagina - 1) * itensPorPagina).Take(itensPorPagina);
+        query = query.Skip(((pagina ?? 1) - 1) * itensPorPagina).Take(itensPorPagina);
 
         return query.ToList();
     }

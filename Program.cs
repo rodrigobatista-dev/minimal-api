@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using minimal_api.Dominio.ModelViews;
 using MinimalApi.Dominio.Entity;
 using MinimalApi.Dominio.Interfaces;
 using MinimalApi.Dominio.ModelViews;
@@ -40,12 +41,38 @@ app.MapPost("/administradores/login", static ([FromBody] LoginDTO loginDTO, IAdm
 #endregion
 
 #region Veiculos
-app.MapPost("/veiculos", static ([FromBody] VeiculoDTO veiculoDTO, IVeiculoServico veiculoServico) =>
+ErrosDeValidacao validaDTO(VeiculoDTO veiculoDTO)
 {
+    var validacao = new ErrosDeValidacao();
+
+    if (string.IsNullOrEmpty(veiculoDTO.Nome))
+    {
+        validacao.Mensagens.Add("O nome do veículo é obrigatório.");
+    }
+    if (string.IsNullOrEmpty(veiculoDTO.Marca))
+    {
+        validacao.Mensagens.Add("A marca do veículo é obrigatória.");
+    }
+    if(veiculoDTO.Ano < 1886 || veiculoDTO.Ano > DateTime.Now.Year + 1)
+    {
+        validacao.Mensagens.Add("O ano do veículo é inválido.");
+    }
+    return validacao;
+}
+
+app.MapPost("/veiculos", ([FromBody] VeiculoDTO veiculoDTO, IVeiculoServico veiculoServico) =>
+{
+
+    var validacao = validaDTO(veiculoDTO);
+    if (validacao.Mensagens.Count > 0)
+    {
+        return Results.BadRequest(validacao);
+    }
+
     var veiculo = new Veiculo
     {
         Nome = veiculoDTO.Nome ?? string.Empty,
-        Modelo = veiculoDTO.Modelo ?? string.Empty,
+        Marca = veiculoDTO.Marca ?? string.Empty,
         Ano = veiculoDTO.Ano
     };
     veiculoServico.Incluir(veiculo);
@@ -55,6 +82,7 @@ app.MapPost("/veiculos", static ([FromBody] VeiculoDTO veiculoDTO, IVeiculoServi
 
 app.MapGet("/veiculos", ([FromQuery] int ? pagina, IVeiculoServico veiculoServico) =>
 {
+    
     var veiculos = veiculoServico.Todos(pagina);
     return Results.Ok(veiculos);
 }).WithTags("Veiculos");
@@ -77,8 +105,16 @@ app.MapPut("/veiculos/{id}", ([FromRoute] int id, [FromBody] VeiculoDTO veiculoD
         return Results.NotFound();
     }
 
+     var validacao = validaDTO(veiculoDTO);
+    if (validacao.Mensagens.Count > 0)
+    {
+        return Results.BadRequest(validacao);
+    }
+
+    
+
     veiculo.Nome = veiculoDTO.Nome ?? veiculo.Nome;
-    veiculo.Modelo = veiculoDTO.Modelo ?? veiculo.Modelo;
+    veiculo.Marca = veiculoDTO.Marca ?? veiculo.Marca;
     veiculo.Ano = veiculoDTO.Ano != 0 ? veiculoDTO.Ano : veiculo.Ano;
 
     veiculoServico.Atualizar(veiculo);
@@ -96,6 +132,7 @@ app.MapDelete("/veiculos/{id}", ([FromRoute] int id, IVeiculoServico veiculoServ
     veiculoServico.Apagar(veiculo);
     return Results.Ok();
 }).WithTags("Veiculos");
+
 #endregion
 
 #region app
