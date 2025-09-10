@@ -22,6 +22,14 @@ public class AdministradorServicoTest
 
         return new DbContexto(configuration);
     }
+// private DbContexto CriarContextoDeTeste()
+// {
+//     var options = new DbContextOptionsBuilder<DbContexto>()
+//         .UseInMemoryDatabase(Guid.NewGuid().ToString()) // garante base nova a cada teste
+//         .Options;
+
+//     return new DbContexto((IConfiguration)options);
+// }
 
 
     [TestMethod]
